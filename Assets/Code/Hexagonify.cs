@@ -6,6 +6,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [BurstCompile]
 public class Hexagonify : MonoBehaviour
@@ -42,8 +43,6 @@ public class Hexagonify : MonoBehaviour
         }
         HexagonifyJob job = new HexagonifyJob(verts, normals);
         job.Schedule().Complete();
-        Debug.Log($"amount hexagons: {job.amountHexagonsArray[0]}");
-        Debug.Log($"amount hexagons: {Mathf.Sqrt(job.amountHexagonsArray[0])}");
         
         Vector2[] tempHexID = new Vector2[job.hexID.Length];
         for (int i = 0; i < job.hexID.Length; i++)
@@ -53,6 +52,7 @@ public class Hexagonify : MonoBehaviour
         mesh.uv = tempHexID;
         
         int width = Mathf.NextPowerOfTwo(Mathf.CeilToInt(Mathf.Sqrt(job.amountHexagonsArray[0])));
+        Debug.Log($"amount hexagons: {job.amountHexagonsArray[0]} texture width: {width}");
         Texture2D posTexture = ToTexture2D(job.hexPos, width, width);
         mat.SetTexture("_HexPos", posTexture);
         Texture2D normalTexture = ToTexture2D(job.hexNormal, width, width);
@@ -137,6 +137,7 @@ public class Hexagonify : MonoBehaviour
             this.verts = verts;
             this.normals = normals;
             hexID = new NativeArray<float>(verts.Length, Allocator.TempJob);
+            hexID.FillArray(-1);
             hexOutline = new NativeArray<float>(verts.Length, Allocator.TempJob);
             hexPos = new NativeArray<float3>(verts.Length / 3, Allocator.TempJob);
             hexNormal = new NativeArray<float3>(verts.Length / 3, Allocator.TempJob);
