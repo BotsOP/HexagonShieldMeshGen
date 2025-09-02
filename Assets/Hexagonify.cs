@@ -20,6 +20,9 @@ public class Hexagonify : MonoBehaviour
 
     private void OnDrawGizmos()
     {
+        if (mesh == null)
+            return;
+        
         Gizmos.DrawSphere(mesh.vertices[tri1], radius);
         Gizmos.DrawSphere(mesh.vertices[tri2], radius);
         Gizmos.DrawSphere(mesh.vertices[tri3], radius);
@@ -45,9 +48,9 @@ public class Hexagonify : MonoBehaviour
         Vector2[] tempHexID = new Vector2[job.hexID.Length];
         for (int i = 0; i < job.hexID.Length; i++)
         {
-            tempHexID[i] = new Vector2(job.hexID[i], 0);
+            tempHexID[i] = new Vector2(job.hexID[i], job.hexOutline[i]);
         }
-        mesh.uv2 = tempHexID;
+        mesh.uv = tempHexID;
         
         int width = Mathf.NextPowerOfTwo(Mathf.CeilToInt(Mathf.Sqrt(job.amountHexagonsArray[0])));
         Texture2D posTexture = ToTexture2D(job.hexPos, width, width);
@@ -60,8 +63,8 @@ public class Hexagonify : MonoBehaviour
         Debug.Log(posTexture.GetPixel(0, 0));
         Debug.Log(normalTexture.GetPixel(0, 0));
 
-        SaveTexture(posTexture, mesh.name + "_HexPositions.png");
-        SaveTexture(normalTexture, mesh.name + "_HexNormals.png");
+        SaveTexture(posTexture, mesh.name + "_HexPositions.exr");
+        SaveTexture(normalTexture, mesh.name + "_HexNormals.exr");
     }
     
     private static Texture2D ToTexture2D(NativeArray<float3> data, int width, int height)
@@ -84,7 +87,7 @@ public class Hexagonify : MonoBehaviour
         return tex;
     }
     
-    private static void SaveTexture(Texture2D texture, string fileName = "SavedTexture.png")
+    private static void SaveTexture(Texture2D texture, string fileName = "SavedTexture.exr")
     {
         if (texture == null)
         {
@@ -93,8 +96,8 @@ public class Hexagonify : MonoBehaviour
         }
 
         // Encode texture to PNG
-        byte[] pngData = texture.EncodeToPNG();
-        if (pngData == null)
+        byte[] exrData = texture.EncodeToEXR(Texture2D.EXRFlags.OutputAsFloat);
+        if (exrData == null)
         {
             Debug.LogError("SaveTexture failed: could not encode texture.");
             return;
@@ -104,7 +107,7 @@ public class Hexagonify : MonoBehaviour
         string path = Path.Combine(Application.dataPath, fileName);
 
         // Write to disk
-        File.WriteAllBytes(path, pngData);
+        File.WriteAllBytes(path, exrData);
 
 #if UNITY_EDITOR
         // Refresh the editor so the file shows up in the Project window
@@ -117,7 +120,8 @@ public class Hexagonify : MonoBehaviour
     [BurstCompile]
     private struct HexagonifyJob : IJob
     {
-        public NativeArray<int> hexID;
+        public NativeArray<float> hexID;
+        public NativeArray<float> hexOutline;
         public NativeArray<float3> hexPos;
         public NativeArray<float3> hexNormal;
         public NativeArray<int> amountHexagonsArray;
@@ -132,9 +136,10 @@ public class Hexagonify : MonoBehaviour
         {
             this.verts = verts;
             this.normals = normals;
-            hexID = new NativeArray<int>(verts.Length, Allocator.TempJob);
-            hexPos = new NativeArray<float3>(verts.Length, Allocator.TempJob);
-            hexNormal = new NativeArray<float3>(verts.Length, Allocator.TempJob);
+            hexID = new NativeArray<float>(verts.Length, Allocator.TempJob);
+            hexOutline = new NativeArray<float>(verts.Length, Allocator.TempJob);
+            hexPos = new NativeArray<float3>(verts.Length / 3, Allocator.TempJob);
+            hexNormal = new NativeArray<float3>(verts.Length / 3, Allocator.TempJob);
             amountHexagonsArray = new NativeArray<int>(1, Allocator.TempJob);
             
             closedSet = new NativeHashSet<float3>(verts.Length, Allocator.TempJob);
@@ -148,6 +153,7 @@ public class Hexagonify : MonoBehaviour
             verts.Dispose();
             normals.Dispose();
             hexID.Dispose();
+            hexOutline.Dispose();
             hexPos.Dispose();
             hexNormal.Dispose();
             closedSet.Dispose();
@@ -267,6 +273,10 @@ public class Hexagonify : MonoBehaviour
                         toSearchIndex.x = vertIndex1;
                         foundFirstVert = true;
                     }
+                    else
+                    {
+                        hexOutline[vertIndex1] = 1;
+                    }
                     if (!math.all(vert2 == centerHexagon))
                     {
                         if (foundFirstVert)
@@ -275,12 +285,20 @@ public class Hexagonify : MonoBehaviour
                             toSearchIndex.x = vertIndex2;
                         foundFirstVert = true;
                     }
+                    else
+                    {
+                        hexOutline[vertIndex2] = 1;
+                    }
                     if (!math.all(vert3 == centerHexagon))
                     {
                         if (foundFirstVert)
                             toSearchIndex.y = vertIndex3;
                         else
                             toSearchIndex.x = vertIndex3;
+                    }
+                    else
+                    {
+                        hexOutline[vertIndex3] = 1;
                     }
                     
                     toSearch.Enqueue(toSearchIndex);
