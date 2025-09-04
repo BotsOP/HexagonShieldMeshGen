@@ -7,6 +7,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Random = UnityEngine.Random;
 
 [BurstCompile]
 public class Hexagonify : MonoBehaviour
@@ -41,7 +42,7 @@ public class Hexagonify : MonoBehaviour
         {
             normals[i] = mesh.normals[i];
         }
-        HexagonifyJob job = new HexagonifyJob(verts, normals);
+        HexagonifyJob job = new HexagonifyJob(verts, normals, Random.Range(0, verts.Length / 3));
         job.Schedule().Complete();
         
         Vector2[] tempHexID = new Vector2[job.hexID.Length];
@@ -131,11 +132,13 @@ public class Hexagonify : MonoBehaviour
         private NativeHashSet<float3> closedSet;
         private NativeQueue<int2> toSearch;
         private int amountHexagons;
+        private int startIndex;
 
-        public HexagonifyJob(NativeArray<float3> verts, NativeArray<float3> normals)
+        public HexagonifyJob(NativeArray<float3> verts, NativeArray<float3> normals, int startIndex)
         {
             this.verts = verts;
             this.normals = normals;
+            this.startIndex = startIndex;
             hexID = new NativeArray<float>(verts.Length, Allocator.TempJob);
             hexID.FillArray(-1);
             hexOutline = new NativeArray<float>(verts.Length, Allocator.TempJob);
@@ -166,7 +169,7 @@ public class Hexagonify : MonoBehaviour
         {
             // int startIndex = verts.Length / 6;
             // toSearch.Enqueue(new int2(startIndex, startIndex + 1));
-            toSearch.Enqueue(new int2(0, 1));
+            toSearch.Enqueue(new int2(startIndex, startIndex + 1));
             int whileEscapeCounter = 0;
 
             while (toSearch.Count > 0 && whileEscapeCounter < 100000)
